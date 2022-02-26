@@ -16,11 +16,11 @@ fn main() {
         Ok(f) => f,
         Err(e) => panic!("Error opening file {}: {}", file_name, e),
     };
-    
-    //let mut file_buffer: Vec<u8> = Vec::new();
 
-    let mut str_buffer = String::new();
-    if let Ok(_) = file.read_to_string(&mut str_buffer) {
-        println!("{}", str_buffer);
+    let mut buffer: Vec<u8> = Vec::new();
+    if let Err(e) = file.read(&mut buffer) {
+        panic!("{}", e)
     }
+
+    let chip = chip8::Chip8::new(&buffer);
 }
