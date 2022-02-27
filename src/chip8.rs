@@ -74,6 +74,97 @@ impl Chip8 {
         chip
     }
 
+    // 1 cpu cycle
+    pub fn cycle(&mut self) {
+        let n0 = self.memory[self.pc as usize] >> 4;
+        let n1 = self.memory[self.pc as usize] & 0b00001111;
+        let n2 = self.memory[(self.pc + 1) as usize] >> 4;
+        let n3 = self.memory[(self.pc + 1) as usize] & 0b00001111;
+        self.pc += 2;
+
+        let nnn = ((n1 as u16) << 8) | ((n2 as u16) << 4) | (n3 as u16);
+        let nn = (n2 << 4) | n3;
+
+        // execute
+        match n0 {
+            0 => {
+                match n3 {
+                    0 => self.op_00E0(),
+                    0xE => self.op_00EE(),
+                    _ => panic!("Unhandled opcode! {}{}{}{}", n0, n1, n2, n3)
+                }
+            }
+            1 => self.op_1NNN(nnn),
+            2 => self.op_2NNN(nnn),
+            3 => self.op_3XNN(n1 as usize, nn),
+            4 => self.op_4XNN(n1 as usize, nn),
+            5 => self.op_5XY0(n1 as usize, n2 as usize),
+            6 => self.op_6XNN(n1 as usize, nn),
+            7 => self.op_7XNN(n1 as usize, nn),
+            8 => {
+                match n3 {
+                    0 => self.op_8XY0(n1 as usize, n2 as usize),
+                    1 => self.op_8XY1(n1 as usize, n2 as usize),
+                    2 => self.op_8XY2(n1 as usize, n2 as usize),
+                    3 => self.op_8XY3(n1 as usize, n2 as usize),
+                    4 => self.op_8XY4(n1 as usize, n2 as usize),
+                    5 => self.op_8XY5(n1 as usize, n2 as usize),
+                    6 => self.op_8XY6(n1 as usize),
+                    7 => self.op_8XY7(n1 as usize, n2 as usize),
+                    0xE => self.op_8XYE(n1 as usize),
+                    _ => panic!("Unhandled opcode! {}{}{}{}", n0, n1, n2, n3)
+                }
+            }
+            9 => self.op_9XY0(n1 as usize, n2 as usize),
+            0xA => self.op_ANNN(nnn),
+            0xB => self.op_BNNN(nnn),
+            0xC => self.op_CXNN(n1 as usize, nn),
+            0xD => self.op_DXYN(n1 as usize, n2 as usize, n3),
+            0xE => {
+                if n2 == 0xA && n3 == 0x1 {
+                    self.op_EXA1(n1 as usize);
+                } else if n2 == 0x9 && n3 == 0xE {
+                    self.op_EX9E(n1 as usize);
+                } else {
+                    panic!("Unhandled opcode! {}{}{}{}", n0, n1, n2, n3);
+                }
+            }
+            0xF => {
+                if n2 == 0x0 && n3 == 0x7 {
+                    self.op_FX07(n1 as usize);
+                } else if n2 == 0x0 && n3 == 0xA {
+                    self.op_FX0A(n1 as usize);
+                } else if n2 == 0x1 && n3 == 0x5 {
+                    self.op_FX15(n1 as usize);
+                } else if n2 == 0x1 && n3 == 0x8 {
+                    self.op_FX18(n1 as usize);
+                } else if n2 == 0x1 && n3 == 0xE {
+                    self.op_FX1E(n1 as usize);
+                } else if n2 == 0x2 && n3 == 0x9 {
+                    self.op_FX29(n1 as usize);
+                } else if n2 == 0x3 && n3 == 0x3 {
+                    self.op_FX33(n1 as usize);
+                } else if n2 == 0x5 && n3 == 0x5 {
+                    self.op_FX55(n1 as usize);
+                } else if n2 == 0x6 && n3 == 0x5 {
+                    self.op_FX55(n1 as usize);
+                } else {
+                    panic!("Unhandled opcode! {}{}{}{}", n0, n1, n2, n3);
+                }
+            }
+            _ => panic!("Unhandled opcode! {}{}{}{}", n0, n1, n2, n3),
+        }
+
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+        }
+    }
+
+
     // INSTRUCTIONS ----------------------------------------------------------------
     // Description copied from wikipedia https://en.wikipedia.org/wiki/CHIP-8
     
@@ -138,23 +229,23 @@ impl Chip8 {
     }
 
     // Sets VX to the value of VY.
-    pub fn op_8XY0(&mut self, vx: usize, nn: u8) {
-        self.registers[vx] = nn;
+    pub fn op_8XY0(&mut self, vx: usize, vy: usize) {
+        self.registers[vx] = self.registers[vy];
     }
 
     // Sets VX to VX or VY. (Bitwise OR operation);
-    pub fn op_8XY1(&mut self, vx: usize, nn: u8) {
-        self.registers[vx] |= nn;
+    pub fn op_8XY1(&mut self, vx: usize, vy: usize) {
+        self.registers[vx] |= self.registers[vy];
     }
 
     // Sets VX to VX and VY. (Bitwise AND operation);
-    pub fn op_8XY2(&mut self, vx: usize, nn: u8) {
-        self.registers[vx] &= nn;
+    pub fn op_8XY2(&mut self, vx: usize, vy: usize) {
+        self.registers[vx] &= self.registers[vy];
     }
 
     // Sets VX to VX xor VY.
-    pub fn op_8XY3(&mut self, vx: usize, nn: u8) {
-        self.registers[vx] ^= nn;
+    pub fn op_8XY3(&mut self, vx: usize, vy: usize) {
+        self.registers[vx] ^= self.registers[vy];
     }
 
     // Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there is not.
@@ -221,9 +312,9 @@ impl Chip8 {
     }
 
     // Sets VX to the result of a bitwise and operation on a random byte
-    pub fn op_CXNN(&mut self, vx: usize) {
+    pub fn op_CXNN(&mut self, vx: usize, nn: u8) {
         let r: u8 = self.rng.gen();
-        self.registers[vx] &= r;
+        self.registers[vx] = nn & r;
     }
 
     // Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels. 
@@ -337,4 +428,11 @@ impl Chip8 {
             self.registers[i] = self.memory[self.index_register as usize + i];
         }
     }
+
+    // ---------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
 }
