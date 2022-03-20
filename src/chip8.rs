@@ -157,7 +157,7 @@ impl Chip8 {
                 } else if n2 == 0x5 && n3 == 0x5 {
                     self.op_FX55(n1 as usize);
                 } else if n2 == 0x6 && n3 == 0x5 {
-                    self.op_FX55(n1 as usize);
+                    self.op_FX65(n1 as usize);
                 } else {
                     panic!("Unhandled opcode! {}{}{}{}", n0, n1, n2, n3);
                 }
@@ -441,7 +441,7 @@ impl Chip8 {
     // Stores from V0 to VX (including VX) in memory, starting at address I. 
     // The offset from I is increased by 1 for each value written, but I itself is left unmodified.
     pub fn op_FX55(&mut self, vx: usize) {
-        for i in 0..vx+1 {
+        for i in 0..vx + 1 {
             self.memory[self.index_register as usize + i] = self.registers[i];
         }
     }
