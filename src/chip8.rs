@@ -40,8 +40,8 @@ impl Chip8 {
         0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
         0xF0, 0x80, 0xF0, 0x80, 0x80  // F
     ];
-    const VIDEO_WIDTH: usize = 32;
-    const VIDEO_HEIGHT: usize = 64;
+    pub const VIDEO_WIDTH: usize = 64;
+    pub const VIDEO_HEIGHT: usize = 32;
     const VIDEO_SIZE: usize = Chip8::VIDEO_WIDTH * Chip8::VIDEO_HEIGHT;
 
     pub fn new(program: &Vec<u8>) -> Chip8 {
@@ -62,20 +62,30 @@ impl Chip8 {
         };
 
         // Load fonts
-        for i in Chip8::FONTSET_START_ADDRESS..(Chip8::FONTSET_START_ADDRESS + Chip8::FONTSET_SIZE) {
-            chip.memory[i] = Chip8::FONTSET[i];
+        for i in 0..Chip8::FONTSET_SIZE {
+            chip.memory[Chip8::FONTSET_START_ADDRESS + i] = Chip8::FONTSET[i];
         }
 
         // Load program
-        for i in Chip8::CODE_START_ADDRESS..(Chip8::CODE_START_ADDRESS + program.len()) {
-            chip.memory[i] = program[i];
+        for i in 0..program.len() {
+            chip.memory[Chip8::CODE_START_ADDRESS + i] = program[i];
         }
 
         chip
     }
 
+    pub fn set_key(&mut self, key: u8, pressed: bool) {
+        self.keys[key as usize] = pressed;
+    }
+
+    pub fn get_video(&self, x: usize, y: usize) -> u32 {
+        self.video[y * Chip8::VIDEO_WIDTH + x]
+    }
+
     // 1 cpu cycle
     pub fn cycle(&mut self) {
+        //println!("{:?}", self.video);
+
         let n0 = self.memory[self.pc as usize] >> 4;
         let n1 = self.memory[self.pc as usize] & 0b00001111;
         let n2 = self.memory[(self.pc + 1) as usize] >> 4;
@@ -225,7 +235,7 @@ impl Chip8 {
 
     // 	Adds NN to VX. (Carry flag is not changed);
     pub fn op_7XNN(&mut self, vx: usize, nn: u8) {
-        self.registers[vx] += nn;
+        self.registers[vx] = self.registers[vx].wrapping_add(nn);
     }
 
     // Sets VX to the value of VY.
@@ -268,7 +278,7 @@ impl Chip8 {
             self.registers[0xF] = 0;
         }
 
-        self.registers[vx] -= self.registers[vy];
+        self.registers[vx] = self.registers[vx].wrapping_sub(self.registers[vy]);
     }
 
     // Stores the least significant bit of VX in VF and then shifts VX to the right by 1.[b]
@@ -285,7 +295,7 @@ impl Chip8 {
             self.registers[0xF] = 0;
         }
 
-        self.registers[vx] = self.registers[vx] - self.registers[vy];
+        self.registers[vx] = self.registers[vx].wrapping_sub(self.registers[vy]);
     }
 
     // Stores the most significant bit of VX in VF and then shifts VX to the left by 1.[b]
@@ -325,24 +335,39 @@ impl Chip8 {
         // sprite is always 8 pixels wide
         // wrap
 
+        println!("op_DXYN: vx: {}, vy: {}, n: {}", vx, vy, n);
+        println!("self.index_register: {}", self.index_register);
+        println!("");
+
         let x = self.registers[vx] as usize % Chip8::VIDEO_WIDTH;
         let y = self.registers[vy] as usize % Chip8::VIDEO_HEIGHT;
 
         self.registers[0xF] = 0;
         for r in 0..n as usize {
+            let sprite_byte = self.memory[self.index_register as usize + r];
             for c in 0..8 as usize {
-                let sprite_pixel = self.memory[(self.index_register as usize + (r as usize * 8) + c as usize)];
+                let sprite_pixel = sprite_byte & (0x80 >> c);
+
                 if sprite_pixel != 0 {
-                    let screen_pixel_index = (y + r) as usize * Chip8::VIDEO_WIDTH + x + c;
+                    print!("1");
+                } else {
+                    print!("0");
+                }
+
+                if sprite_pixel != 0 {
+                    let screen_pixel_index = ((y + r) as usize * Chip8::VIDEO_WIDTH) + x + c;
                     if self.video[screen_pixel_index] != 0 {
                         // Flipped
                         self.registers[0xF] = 1;
                     }
 
-                    self.video[screen_pixel_index] ^= 0xFFFFFFFF;
+                    self.video[screen_pixel_index] ^= 0x1;
                 }
             } 
+            println!("");
         }
+
+        println!("");
     }
 
     // Skips the next instruction if the key stored in VX is pressed. (Usually the next instruction is a jump to skip a code block);
@@ -392,7 +417,7 @@ impl Chip8 {
 
     // Adds VX to I. VF is not affected.
     pub fn op_FX1E(&mut self, vx: usize) {
-        self.index_register += self.registers[vx] as u16;
+        self.index_register = self.index_register.wrapping_add(self.registers[vx] as u16);
     }
 
     // Sets I to the location of the sprite for the character in VX. Characters 0-F (in hexadecimal) are represented by a 4x5 font.
